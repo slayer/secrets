@@ -176,7 +176,7 @@ func TestServer_generateLinkCtrl(t *testing.T) {
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Protocol:       "https",
-			Domain:         "example.com",
+			Domains:        []string{"example.com", "alt.example.com"},
 		})
 	require.NoError(t, err)
 
@@ -296,7 +296,7 @@ func TestServer_generateLinkCtrl_HTMX(t *testing.T) {
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Protocol:       "https",
-			Domain:         "example.com",
+			Domains:        []string{"example.com"},
 		})
 	require.NoError(t, err)
 
@@ -529,7 +529,7 @@ func TestServer_newTemplateData(t *testing.T) {
 		}),
 		"test-v",
 		Config{
-			Domain:         "example.com",
+			Domains:        []string{"example.com"},
 			PinSize:        5,
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
@@ -576,7 +576,7 @@ func TestServer_BrandingInTemplates(t *testing.T) {
 		}),
 		"test-v",
 		Config{
-			Domain:         "example.com",
+			Domains:        []string{"example.com"},
 			PinSize:        5,
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
@@ -607,5 +607,126 @@ func TestServer_BrandingInTemplates(t *testing.T) {
 		body := rr.Body.String()
 		assert.Contains(t, body, "Acme Corp Secrets")
 		assert.NotContains(t, body, "Safe Secrets")
+	})
+}
+
+func TestServer_getValidatedHost(t *testing.T) {
+	eng := store.NewInMemory(time.Second)
+	srv, err := New(
+		messager.New(eng, messager.Crypt{Key: "123456789012345678901234567"}, messager.Params{
+			MaxDuration:    10 * time.Hour,
+			MaxPinAttempts: 3,
+		}),
+		"test-v",
+		Config{
+			Domains:        []string{"example.com", "alt.example.com"},
+			PinSize:        5,
+			MaxPinAttempts: 3,
+			MaxExpire:      10 * time.Hour,
+			Branding:       "Test Brand",
+		})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name         string
+		host         string
+		expectedHost string
+	}{
+		{
+			name:         "allowed domain",
+			host:         "example.com",
+			expectedHost: "example.com",
+		},
+		{
+			name:         "allowed domain with standard port",
+			host:         "example.com:443",
+			expectedHost: "example.com",
+		},
+		{
+			name:         "allowed domain with custom port",
+			host:         "example.com:8080",
+			expectedHost: "example.com:8080",
+		},
+		{
+			name:         "second allowed domain",
+			host:         "alt.example.com",
+			expectedHost: "alt.example.com",
+		},
+		{
+			name:         "disallowed domain falls back to first configured",
+			host:         "malicious.com",
+			expectedHost: "example.com",
+		},
+		{
+			name:         "empty host falls back to first configured",
+			host:         "",
+			expectedHost: "example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", http.NoBody)
+			req.Host = tt.host
+
+			result := srv.getValidatedHost(req)
+			assert.Equal(t, tt.expectedHost, result)
+		})
+	}
+}
+
+func TestServer_generateLinkCtrl_MultipleDomains(t *testing.T) {
+	eng := store.NewInMemory(time.Second)
+	srv, err := New(
+		messager.New(eng, messager.Crypt{Key: "123456789012345678901234567"}, messager.Params{
+			MaxDuration:    10 * time.Hour,
+			MaxPinAttempts: 3,
+		}),
+		"1",
+		Config{
+			PinSize:        5,
+			MaxPinAttempts: 3,
+			MaxExpire:      10 * time.Hour,
+			Protocol:       "https",
+			Domains:        []string{"example.com", "alt.example.com"},
+		})
+	require.NoError(t, err)
+
+	t.Run("uses request domain when allowed", func(t *testing.T) {
+		formData := url.Values{
+			"message": {"secret message"},
+			"exp":     {"15"},
+			"expUnit": {"m"},
+			"pin":     {"1", "2", "3", "4", "5"},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = "alt.example.com"
+		rr := httptest.NewRecorder()
+
+		srv.generateLinkCtrl(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "https://alt.example.com/message/")
+	})
+
+	t.Run("falls back to first domain when disallowed", func(t *testing.T) {
+		formData := url.Values{
+			"message": {"secret message"},
+			"exp":     {"15"},
+			"expUnit": {"m"},
+			"pin":     {"1", "2", "3", "4", "5"},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = "malicious.com"
+		rr := httptest.NewRecorder()
+
+		srv.generateLinkCtrl(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "https://example.com/message/")
 	})
 }

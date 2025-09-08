@@ -24,7 +24,7 @@ import (
 
 // Config is a configuration for the server
 type Config struct {
-	Domain   string
+	Domains  []string // allowed domains list
 	WebRoot  string
 	Protocol string
 	Branding string

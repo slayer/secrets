@@ -158,7 +158,8 @@ func (s Server) generateLinkCtrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msgURL := fmt.Sprintf("%s://%s/message/%s", s.cfg.Protocol, s.cfg.Domain, msg.Key)
+	validatedHost := s.getValidatedHost(r)
+	msgURL := fmt.Sprintf("%s://%s/message/%s", s.cfg.Protocol, validatedHost, msg.Key)
 
 	s.render(w, http.StatusOK, "secure-link.tmpl.html", "secure-link", msgURL)
 }
@@ -402,4 +403,38 @@ func until(n int) []int {
 		result[i] = i
 	}
 	return result
+}
+
+// getValidatedHost returns the request host if it's in the allowed domains list, otherwise returns the default domain
+func (s Server) getValidatedHost(r *http.Request) string {
+	requestHost := r.Host
+
+	// Remove port if present for comparison
+	host := requestHost
+	if colonIndex := strings.Index(host, ":"); colonIndex > 0 {
+		host = host[:colonIndex]
+	}
+
+	// Check if the host is in allowed domains
+	for _, domain := range s.cfg.Domains {
+		if host == domain {
+			// Return original host with port if it was present and not standard
+			if colonIndex := strings.Index(requestHost, ":"); colonIndex > 0 {
+				port := requestHost[colonIndex+1:]
+				// Keep non-standard ports in the URL
+				if port != "80" && port != "443" {
+					return requestHost
+				}
+			}
+			return host
+		}
+	}
+
+	// Host not in allowed domains, return the first configured domain as fallback
+	if len(s.cfg.Domains) > 0 {
+		return s.cfg.Domains[0]
+	}
+
+	// Should not happen if config is properly validated
+	return "localhost"
 }

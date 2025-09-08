@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	log "github.com/go-pkgz/lgr"
@@ -24,7 +25,8 @@ var opts struct {
 	WebRoot        string        `long:"web" env:"WEB" description:"web ui location (dev mode, uses embedded files if not set)"`
 	Branding       string        `long:"branding" env:"BRANDING" default:"Safe Secrets" description:"application branding/title"`
 	Dbg            bool          `long:"dbg" description:"debug mode"`
-	Domain         string        `short:"d" long:"domain" env:"DOMAIN" description:"site domain" required:"true"`
+	Domain         string        `short:"d" long:"domain" env:"DOMAIN" description:"site domain (deprecated, use domains)" required:"true"`
+	Domains        string        `long:"domains" env:"DOMAINS" description:"allowed domains (comma-separated list)"`
 	Protocol       string        `short:"p" long:"protocol" env:"PROTOCOL" description:"site protocol" choice:"http" choice:"https" default:"https" required:"true"` // nolint
 }
 
@@ -42,8 +44,22 @@ func main() {
 	crypter := messager.Crypt{Key: messager.MakeSignKey(opts.SignKey, opts.PinSize)}
 	params := messager.Params{MaxDuration: opts.MaxExpire, MaxPinAttempts: opts.MaxPinAttempts}
 
+	// Parse domains from comma-separated string or use single domain for compatibility
+	var domains []string
+	if opts.Domains != "" {
+		for _, d := range strings.Split(opts.Domains, ",") {
+			d = strings.TrimSpace(d)
+			if d != "" {
+				domains = append(domains, d)
+			}
+		}
+	}
+	if len(domains) == 0 && opts.Domain != "" {
+		domains = []string{opts.Domain}
+	}
+
 	srv, err := server.New(messager.New(dataStore, crypter, params), revision, server.Config{
-		Domain:         opts.Domain,
+		Domains:        domains,
 		Protocol:       opts.Protocol,
 		PinSize:        opts.PinSize,
 		MaxPinAttempts: opts.MaxPinAttempts,
