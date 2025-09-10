@@ -70,12 +70,7 @@ type Messager interface {
 // newTemplateData creates a templateData with common fields populated
 func (s Server) newTemplateData(r *http.Request, form any) templateData {
 	// use the first configured domain for canonical URLs (SEO best practice)
-	var canonicalDomain string
-	if len(s.cfg.Domain) == 0 {
-		canonicalDomain = "localhost" // fallback, should not happen
-	} else {
-		canonicalDomain = s.cfg.Domain[0]
-	}
+	canonicalDomain := s.cfg.Domain[0]
 
 	// construct the canonical URL
 	url := fmt.Sprintf("%s://%s%s", s.cfg.Protocol, canonicalDomain, r.URL.Path)
