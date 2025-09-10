@@ -454,7 +454,7 @@ func (s Server) getValidatedHost(r *http.Request) string {
 	}
 
 	// Should not happen with required validation - fail loudly if reached
-	panic("at least one domain must be configured - this should be caught at startup")
+	panic("no domains configured: validation should occur in server.New() at startup")
 }
 
 // jsonEscape safely escapes a string for use in JSON-LD script tags
