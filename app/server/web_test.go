@@ -888,7 +888,7 @@ func TestServer_IPv6LinkGeneration(t *testing.T) {
 		// Create a custom request that simulates an edge case
 		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.Host = "2001:db8::1:8080" // This could be interpreted as IPv6 address 2001:db8::1:8080
+		req.Host = "2001:db8::1:8080" // Intentionally malformed: not valid IPv6 with port; correct form is [2001:db8::1]:8080
 		rr := httptest.NewRecorder()
 
 		srv.generateLinkCtrl(rr, req)
