@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -188,7 +189,7 @@ func (s Server) generateLinkCtrl(w http.ResponseWriter, r *http.Request) {
 	msgURL := (&url.URL{
 		Scheme: s.cfg.Protocol,
 		Host:   validatedHost,
-		Path:   "/message/" + msg.Key,
+		Path:   path.Join("/message", msg.Key),
 	}).String()
 
 	s.render(w, http.StatusOK, "secure-link.tmpl.html", "secure-link", msgURL)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -984,6 +985,46 @@ func TestIPv6BracketingLogic(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.expected, validatedHost, tt.description)
+		})
+	}
+}
+
+func TestServer_URLConstruction(t *testing.T) {
+	tests := []struct {
+		name        string
+		messageKey  string
+		expectedURL string
+	}{
+		{
+			name:        "normal key",
+			messageKey:  "68cb14f4-e2767ae5-ef7b-492f-9456-25d3e998074f",
+			expectedURL: "https://example.com/message/68cb14f4-e2767ae5-ef7b-492f-9456-25d3e998074f",
+		},
+		{
+			name:        "key with spaces (hypothetical)",
+			messageKey:  "test key with spaces",
+			expectedURL: "https://example.com/message/test%20key%20with%20spaces",
+		},
+		{
+			name:        "key with special chars (hypothetical)",
+			messageKey:  "test+key&with=special?chars",
+			expectedURL: "https://example.com/message/test+key&with=special%3Fchars",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Simulate URL construction logic
+			validatedHost := "example.com"
+			protocol := "https"
+
+			msgURL := (&url.URL{
+				Scheme: protocol,
+				Host:   validatedHost,
+				Path:   path.Join("/message", tt.messageKey),
+			}).String()
+
+			assert.Equal(t, tt.expectedURL, msgURL)
 		})
 	}
 }
