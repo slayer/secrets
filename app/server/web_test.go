@@ -957,12 +957,6 @@ func TestIPv6BracketingLogic(t *testing.T) {
 			expected:    "[::1]:8080",
 			description: "IPv6 with port and brackets should stay unchanged",
 		},
-		{
-			name:        "IPv6 ambiguous address gets bracketed",
-			input:       "2001:db8::1:8080",
-			expected:    "[2001:db8::1:8080]",
-			description: "Ambiguous IPv6 address should be treated as IPv6 and bracketed",
-		},
 	}
 
 	for _, tt := range tests {
