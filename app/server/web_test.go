@@ -897,8 +897,8 @@ func TestServer_IPv6LinkGeneration(t *testing.T) {
 		// Should either be bracketed IPv6 address or fallback to first domain
 		body := rr.Body.String()
 		assert.True(t,
-			strings.Contains(body, "https://[") || strings.Contains(body, "https://::1/message/"),
-			"Should handle IPv6 edge case properly: %s", body)
+			strings.Contains(body, "https://["),
+			"Should handle IPv6 edge case properly (must be bracketed IPv6 or fallback to valid domain): %s", body)
 	})
 }
 
