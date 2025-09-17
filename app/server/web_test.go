@@ -179,7 +179,7 @@ func TestServer_generateLinkCtrl(t *testing.T) {
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Protocol:       "https",
-			Domain:        []string{"example.com", "alt.example.com"},
+			Domain:         []string{"example.com", "alt.example.com"},
 		})
 	require.NoError(t, err)
 
@@ -299,7 +299,7 @@ func TestServer_generateLinkCtrl_HTMX(t *testing.T) {
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Protocol:       "https",
-			Domain:        []string{"example.com"},
+			Domain:         []string{"example.com"},
 		})
 	require.NoError(t, err)
 
@@ -534,7 +534,7 @@ func TestServer_newTemplateData(t *testing.T) {
 		}),
 		"test-v",
 		Config{
-			Domain:        []string{"example.com"},
+			Domain:         []string{"example.com"},
 			Protocol:       "https",
 			PinSize:        5,
 			MaxPinAttempts: 3,
@@ -591,9 +591,9 @@ func TestServer_BrandingInTemplates(t *testing.T) {
 		}),
 		"test-v",
 		Config{
-			Domain:        []string{"example.com"},
-			Protocol:      "https",
-			PinSize:       5,
+			Domain:         []string{"example.com"},
+			Protocol:       "https",
+			PinSize:        5,
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Branding:       "Acme Corp Secrets",
@@ -755,7 +755,7 @@ func TestServer_generateLinkCtrl_MultipleDomain(t *testing.T) {
 			MaxPinAttempts: 3,
 			MaxExpire:      10 * time.Hour,
 			Protocol:       "https",
-			Domain:        []string{"example.com", "alt.example.com"},
+			Domain:         []string{"example.com", "alt.example.com"},
 		})
 	require.NoError(t, err)
 
@@ -795,6 +795,82 @@ func TestServer_generateLinkCtrl_MultipleDomain(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		assert.Contains(t, rr.Body.String(), "https://example.com/message/")
+	})
+}
+
+func TestServer_IPv6LinkGeneration(t *testing.T) {
+	eng := store.NewInMemory(time.Second)
+	srv, err := New(
+		messager.New(eng, messager.Crypt{Key: "123456789012345678901234567"}, messager.Params{
+			MaxDuration:    10 * time.Hour,
+			MaxPinAttempts: 3,
+		}),
+		"1",
+		Config{
+			PinSize:        5,
+			MaxPinAttempts: 3,
+			MaxExpire:      10 * time.Hour,
+			Protocol:       "https",
+			Domain:         []string{"::1", "2001:db8::1"},
+		})
+	require.NoError(t, err)
+
+	t.Run("IPv6 with standard port gets bracketed", func(t *testing.T) {
+		formData := url.Values{
+			"message": {"secret message"},
+			"exp":     {"15"},
+			"expUnit": {"m"},
+			"pin":     {"1", "2", "3", "4", "5"},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = "[::1]:443" // IPv6 with standard HTTPS port
+		rr := httptest.NewRecorder()
+
+		srv.generateLinkCtrl(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "https://[::1]/message/", "IPv6 without port should be bracketed")
+		assert.NotContains(t, rr.Body.String(), "https://::1/message/", "Should not have unbracketed IPv6")
+	})
+
+	t.Run("IPv6 with non-standard port stays bracketed", func(t *testing.T) {
+		formData := url.Values{
+			"message": {"secret message"},
+			"exp":     {"15"},
+			"expUnit": {"m"},
+			"pin":     {"1", "2", "3", "4", "5"},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = "[::1]:8080" // IPv6 with non-standard port
+		rr := httptest.NewRecorder()
+
+		srv.generateLinkCtrl(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "https://[::1]:8080/message/", "IPv6 with non-standard port should keep port and brackets")
+	})
+
+	t.Run("IPv6 without port gets bracketed", func(t *testing.T) {
+		formData := url.Values{
+			"message": {"secret message"},
+			"exp":     {"15"},
+			"expUnit": {"m"},
+			"pin":     {"1", "2", "3", "4", "5"},
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/generate-link", strings.NewReader(formData.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Host = "2001:db8::1" // IPv6 without port or brackets
+		rr := httptest.NewRecorder()
+
+		srv.generateLinkCtrl(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Contains(t, rr.Body.String(), "https://[2001:db8::1]/message/", "IPv6 without brackets should be bracketed")
 	})
 }
 

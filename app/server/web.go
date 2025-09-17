@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -168,7 +169,17 @@ func (s Server) generateLinkCtrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	validatedHost := s.getValidatedHost(r)
-	msgURL := fmt.Sprintf("%s://%s/message/%s", s.cfg.Protocol, validatedHost, msg.Key)
+
+	// Ensure IPv6 addresses are properly bracketed for URL construction
+	if ip := net.ParseIP(validatedHost); ip != nil && ip.To4() == nil && !strings.HasPrefix(validatedHost, "[") {
+		validatedHost = "[" + validatedHost + "]"
+	}
+
+	msgURL := (&url.URL{
+		Scheme: s.cfg.Protocol,
+		Host:   validatedHost,
+		Path:   "/message/" + msg.Key,
+	}).String()
 
 	s.render(w, http.StatusOK, "secure-link.tmpl.html", "secure-link", msgURL)
 }
